@@ -9,5 +9,5 @@ jobs:
       with:
         url: "https://jenkins.sdpmlab.org/"
         user: "ashleyjuan"
-        token: "11887c5d963c88cd9ca21f05ab6d88bd51"
+        token: "${{secrets.TOKEN}}"
         job: "410977002"
