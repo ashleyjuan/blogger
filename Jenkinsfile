@@ -1,60 +1,84 @@
 pipeline {
     agent {
         node {
-            label '611177209'
+            label '410977002'
         }
     }
     options {
         skipDefaultCheckout(true)
     }
     stages {
-        stage('Clean old DOCs & chekcout SCM') {
+        stage('Clean old DOCs & checkout SCM') {
             steps {
-                echo 'Cleaning old DOCs and checking out SCM...'
                 cleanWs()
                 checkout scm
             }
         }
-        stage('Verify tools') {
+        stage('verify tools') {
             steps {
-                echo 'Verifying Docker, Docker Compose, and Composer versions...'
-            }
+                sh '''
+                docker info
+                docker version
+                docker-compose version
+                '''
+            } 
         }
         stage('Start Container') {
             steps {
-                echo 'Starting the Docker containers...'
+                sh '''
+                docker-compose up -d
+                '''
             }
         }
         stage('Dependency installation') {
             steps {
-                echo 'Installing dependencies...'
+                sh '''
+                docker-compose exec -T ci4_service sh -c "cd /app && composer install"
+                docker-compose restart
+                '''
             }
         }
         stage('Environment Setting Up') {
             steps {
-                echo 'Setting up the environment...'
+                script {
+                    sh '''
+                    cp app/env app/.env
+                    '''
+                }
             }
         }
         stage('Database migrate') {
             steps {
-                echo 'Running database migration...'
+                sh '''
+                docker-compose exec -T ci4_service sh -c "php spark migrate"
+                '''
             }
         }
         stage('Database seed') {
             steps {
-                echo 'Seeding the database...'
+                sh '''
+                sleep 2 
+                docker-compose exec -T ci4_service sh -c "php spark migrate"
+                docker-compose exec -T ci4_service sh -c "php spark db:seed Members"
+                docker-compose exec -T ci4_service sh -c "php spark db:seed TodoLists"
+                docker-compose up -d
+                '''
             }
         }
         stage('Unit testing') {
             steps {
-                echo 'Running unit tests...'
-                // junit 'app/build/logs/blogger_unitTest.xml'
+                sh '''
+                docker-compose exec -T ci4_service sh -c "vendor/bin/phpunit --log-junit build/logs/blogger_unitTest.xml"
+                ls
+                '''
+                junit 'app/build/logs/blogger_unitTest.xml'
             }
         }
     }
     post {
         always {
-            echo 'Cleaning up Docker containers...'
+            sh 'docker-compose down'
         }
     }
 }
+
